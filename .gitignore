@@ -1,0 +1,23 @@
+# 源码与素材（不需要上传到网页）
+_imgs/
+__pycache__/
+*.pyc
+
+# 回归测试与构建辅助（可保留在本地）
+_e2e.js
+_harness.js
+_regress.js
+_structure.py
+_imgtest.js
+
+# 旧版本与临时文件
+wan-gu-zhi-wang.v1-original.html
+ds_share.html
+share_og_description.txt
+_*.png
+_*.txt
+
+# 系统文件
+Thumbs.db
+desktop.ini
+.DS_Store
