@@ -944,13 +944,14 @@ function markCardEnter(id){
 
 /* ==================== 插图：立绘（配图优先，回退程序化 SVG） ==================== */
 const USE_IMAGES = true;
+const IMG_EXT = 'webp';
 const IMG_DIR = 'assets/gu/';
 
 /* 统一入口：有配图返回 <img>，否则回退程序化 SVG，调用方不必关心 */
 function figureHTML(g, small){
     const sp = speciesOf(g);
     if(USE_IMAGES && sp){
-        const file = (small ? 'sm_' : '') + sp.id + '.webp';
+        const file = (small ? 'sm_' : '') + sp.id + '.' + IMG_EXT;
         return '<img class="gu-img t' + g.tier + '" src="' + IMG_DIR + file +
             '" alt="' + sp.name + '" loading="lazy" draggable="false">';
     }

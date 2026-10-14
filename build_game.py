@@ -3,17 +3,19 @@
 万蛊之王 v2 —— 生成器
 把 SCRIPT_BODY / STYLE_BODY 注入 TPL，输出 wan-gu-zhi-wang.html
 新增：五行克制、物种梯度(20种)、融合失败、特殊天赋、忠心度/反叛、不败信念
-配图：assets/gu/<speciesId>.png（512px）与 sm_<id>.png（160px 缩略）
+配图：assets/gu/<speciesId>.<ext>（512px）与 sm_<id>.<ext>（160px 缩略）
 """
 import io, os
 
 OUT = "wan-gu-zhi-wang.html"
 # 配图开关：True 用 assets/gu 的插画，False 回退到内置程序化 SVG
 USE_IMAGES = True
+# 立绘扩展名：网页部署用 webp（比 png 小约 7 倍）
+IMG_EXT = "webp"
 
 def images_ready():
     need = ["m1", "w1", "s1", "f1", "e1", "x7"]
-    return all(os.path.exists(os.path.join("assets", "gu", i + ".png")) for i in need)
+    return all(os.path.exists(os.path.join("assets", "gu", i + "." + IMG_EXT)) for i in need)
 
 # ============================================================ CSS ============
 STYLE_BODY = r"""
@@ -862,13 +864,14 @@ function markCardEnter(id){
 
 /* ==================== 插图：立绘（配图优先，回退程序化 SVG） ==================== */
 const USE_IMAGES = __USE_IMAGES__;
+const IMG_EXT = '__IMG_EXT__';
 const IMG_DIR = 'assets/gu/';
 
 /* 统一入口：有配图返回 <img>，否则回退程序化 SVG，调用方不必关心 */
 function figureHTML(g, small){
     const sp = speciesOf(g);
     if(USE_IMAGES && sp){
-        const file = (small ? 'sm_' : '') + sp.id + '.png';
+        const file = (small ? 'sm_' : '') + sp.id + '.' + IMG_EXT;
         return '<img class="gu-img t' + g.tier + '" src="' + IMG_DIR + file +
             '" alt="' + sp.name + '" loading="lazy" draggable="false">';
     }
@@ -2206,12 +2209,18 @@ def main():
     if USE_IMAGES and not use_img:
         print("!! 警告：assets/gu 下配图不完整，已回退到内置 SVG 插图")
     script = SCRIPT_BODY.replace("__USE_IMAGES__", "true" if use_img else "false")
+    script = script.replace("__IMG_EXT__", IMG_EXT)
     html = TPL.replace("__STYLE__", STYLE_BODY).replace("__SCRIPT__", script)
     with io.open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(html)
-    print("wrote %s  %.1f KB  %d lines  | 配图: %s"
+    print("wrote %s  %.1f KB  %d lines  | 配图: %s (.%s)"
           % (OUT, len(html.encode("utf-8")) / 1024.0, html.count("\n") + 1,
-             "启用 (assets/gu)" if use_img else "关闭 (内置SVG)"))
+             "启用 (assets/gu)" if use_img else "关闭 (内置SVG)", IMG_EXT))
+    # 网页部署版：同名内容复制一份为 index.html（GitHub Pages 入口）
+    if use_img:
+        with io.open("index.html", "w", encoding="utf-8", newline="\n") as f:
+            f.write(html)
+        print("wrote index.html  (GitHub Pages 入口)")
 
 if __name__ == "__main__":
     main()
