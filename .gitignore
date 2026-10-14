@@ -3,17 +3,25 @@ _imgs/
 __pycache__/
 *.pyc
 
+# 根目录的 PNG 立绘（网页版用 WebP，PNG 仅本地构建用）
+/assets/gu/*.png
+
 # 回归测试与构建辅助（可保留在本地）
 _e2e.js
 _harness.js
 _regress.js
 _structure.py
 _imgtest.js
+_diag_pages.py
+_livesite.py
 
 # 旧版本与临时文件
+wan-gu-zhi-wang.html
 wan-gu-zhi-wang.v1-original.html
 ds_share.html
 share_og_description.txt
+preview-game.png
+preview-species.png
 _*.png
 _*.txt
 
