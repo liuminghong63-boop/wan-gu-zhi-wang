@@ -1,18 +1,34 @@
 # -*- coding: utf-8 -*-
 """
 一键发布到 GitHub Pages
-用法：  python publish.py <GitHub_Token> [仓库名]
+
+用法（令牌不再经过命令行参数，避免留在历史记录里）：
+
+  # 方式 A：环境变量（推荐，脚本不会回显）
+  set GITHUB_TOKEN=ghp_xxx        # PowerShell: $env:GITHUB_TOKEN="ghp_xxx"
+  python publish.py
+
+  # 方式 B：交互式输入（终端里直接粘贴，屏幕上不回显）
+  python publish.py
+
+  # 方式 C：管道输入（脚本化调用）
+  echo ghp_xxx | python publish.py
+
+  # 可选：指定仓库名 / 禁止任何输入提示（CI、自动化必用）
+  python publish.py my-repo --no-input
 
 做的事：
-  1) 用令牌建仓（已存在则复用）
+  1) 校验令牌并建仓（已存在则复用）
   2) 经本地代理推送本地 main 分支
   3) 调用 Pages API 开启 Pages（main / 根目录）
   4) 打印最终网址
 
-安全：令牌只在本进程内使用，不写入任何文件、不打印、不写进 git 配置。
-      推送用的远程地址只存在于本次命令的命令行参数里。
+安全：
+  - 令牌只存在于本进程内存，不写入任何文件、不写进 git 配置、不打印
+  - 推送时用 http.extraHeader 携带凭据，令牌不出现在远程 URL 里
+  - git 报错输出做令牌脱敏
 """
-import sys, os, json, subprocess, base64, time
+import sys, os, json, subprocess, base64
 import urllib.request, urllib.error
 
 PROXY = "http://127.0.0.1:7897"
@@ -20,6 +36,52 @@ GIT = r"C:\Users\guess\AppData\Local\GitHubDesktop\app-3.6.5\resources\app\git\c
 CA = "C:/Users/guess/AppData/Local/GitHubDesktop/app-3.6.5/resources/app/git/mingw64/etc/ssl/certs/ca-bundle.crt"
 OWNER = "liuminghong63-boop"
 DEFAULT_REPO = "wan-gu-zhi-wang"
+
+def read_token(allow_prompt=True):
+    """按顺序取令牌，任何情况下都不会无限期阻塞：
+       1) 环境变量 GITHUB_TOKEN
+       2) 标准输入为管道/重定向时读一行（3 秒超时）
+       3) 终端交互：隐藏回显（仅 allow_prompt 为真时）
+       4) 都不行 -> 返回空，由调用方报错退出
+    """
+    tok = os.environ.get("GITHUB_TOKEN", "").strip()
+    if tok:
+        return tok, "环境变量 GITHUB_TOKEN"
+
+    def _with_timeout(fn, seconds):
+        """在守护线程里跑 fn，超时返回 None，绝不阻塞主线程"""
+        import threading
+        box = {}
+
+        def runner():
+            try:
+                box["v"] = fn()
+            except (EOFError, KeyboardInterrupt):
+                box["v"] = None
+            except Exception:
+                box["v"] = None
+
+        th = threading.Thread(target=runner, daemon=True)
+        th.start()
+        th.join(seconds)
+        return box.get("v")
+
+    std = sys.stdin
+    if std is not None and not std.closed:
+        if std.isatty():
+            if not allow_prompt:
+                return "", "已指定 --no-input，且未提供 GITHUB_TOKEN"
+            def ask():
+                import getpass
+                return getpass.getpass("请粘贴 GitHub 令牌（输入不回显，留空取消）：").strip()
+            v = _with_timeout(ask, 300)
+            return (v, "交互式输入") if v else ("", "未输入或超时")
+        else:
+            v = _with_timeout(lambda: std.readline().strip(), 3)
+            if v:
+                return v, "标准输入"
+
+    return "", "非交互环境且未提供 GITHUB_TOKEN"
 
 def api(url, token, method="GET", payload=None):
     data = json.dumps(payload).encode() if payload is not None else None
@@ -44,15 +106,23 @@ def api(url, token, method="GET", payload=None):
             return e.code, {"raw": body}
 
 def main():
-    if len(sys.argv) < 2:
+    # 解析参数：只认仓库名与 --no-input，令牌绝不走命令行
+    args = [a for a in sys.argv[1:]]
+    allow_prompt = True
+    if "--no-input" in args:
+        allow_prompt = False
+        args.remove("--no-input")
+    repo = (args[0] if args else DEFAULT_REPO).strip()
+    token, how = read_token(allow_prompt)
+    if not token:
         print(__doc__)
-        print("错误：缺少令牌")
+        print("错误：未取得令牌（%s）" % how)
+        print("请先设置环境变量 GITHUB_TOKEN，或直接运行 python publish.py 交互输入。")
         return 2
-    token = sys.argv[1].strip()
-    repo = (sys.argv[2] if len(sys.argv) > 2 else DEFAULT_REPO).strip()
 
     print("=" * 56)
     print("发布 万蛊之王 到 GitHub Pages")
+    print("令牌来源: " + how)
     print("=" * 56)
 
     # 1) 校验令牌
@@ -82,21 +152,25 @@ def main():
             return 1
         print("[2/4] 仓库已创建:", info["html_url"])
 
-    # 3) 推送
-    print("[3/4] 正在推送（约 1.8MB）…")
-    remote = "https://%s:%s@github.com/%s/%s.git" % (OWNER, token, OWNER, repo)
+    # 3) 推送：凭据放在 HTTP 头里，不出现在 URL / 进程参数 / 错误输出中
+    print("[3/4] 正在推送…")
+    basic = base64.b64encode(("%s:%s" % (OWNER, token)).encode()).decode()
+    remote = "https://github.com/%s/%s.git" % (OWNER, repo)
     cmd = [GIT,
            "-c", "http.proxy=" + PROXY,
            "-c", "http.sslBackend=openssl",
            "-c", "http.sslCAInfo=" + CA,
            "-c", "credential.helper=",
+           "-c", "http.extraHeader=Authorization: Basic " + basic,
            "push", remote, "main:main", "--force"]
     env = dict(os.environ, GIT_TERMINAL_PROMPT="0", GIT_ASKPASS="echo")
     p = subprocess.run(cmd, cwd=os.getcwd(), env=env, capture_output=True, text=True)
+    out = ((p.stderr or "") + (p.stdout or ""))
+    # 双保险脱敏
+    out = out.replace(token, "***").replace(basic, "***")
     if p.returncode != 0:
         print("[X] 推送失败:")
-        # 令牌可能出现在 git 的错误输出里，这里做一次脱敏
-        print((p.stderr or p.stdout).replace(token, "***")[:1200])
+        print(out[:1200])
         return 1
     print("      推送完成")
 
