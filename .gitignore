@@ -29,3 +29,7 @@ _*.txt
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# 无头浏览器截图用的临时配置目录
+_cp*/
+_*.png
