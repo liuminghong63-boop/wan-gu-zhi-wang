@@ -44,6 +44,8 @@ python -m http.server 8000
 │   ├── <id>.webp           #   512px，用于卡片与战斗
 │   └── sm_<id>.webp        #   160px，用于图鉴缩略
 ├── build_game.py           # 生成器（改数值/加物种改这里）
+├── publish.py              # 发布脚本（建仓/推送/开 Pages 一条龙）
+├── make_webp.py            # 从原始 PNG 重新生成 WebP 立绘
 └── README.md
 ```
 
@@ -51,12 +53,22 @@ python -m http.server 8000
 
 > 立绘用 WebP 存储（比 PNG 小约 7 倍），全站总计约 1.8 MB。所有现代浏览器均支持。
 
-## 部署到 GitHub Pages
+## 在线游玩
 
-1. 新建一个公开仓库，把本目录**所有文件**（含 `.nojekyll` 和 `assets/`）上传到仓库根目录
-2. 仓库 **Settings → Pages**
-3. **Source** 选 `Deploy from a branch`，**Branch** 选 `main`、目录选 `/ (root)`，保存
-4. 等 1–2 分钟，访问 `https://<你的用户名>.github.io/<仓库名>/`
+**<https://liuminghong63-boop.github.io/wan-gu-zhi-wang/>**
+
+## 部署与更新
+
+已用 `publish.py` 部署到 GitHub Pages。日常更新只需两条命令：
+
+```powershell
+python build_game.py    # 重新生成 index.html
+python publish.py       # 会提示粘贴令牌（输入不回显），推完 1 分钟内自动发布
+```
+
+`publish.py` 的令牌来自 `GITHUB_TOKEN` 环境变量或隐藏输入，**不经命令行、不落地、不打印**；推送用 `http.extraHeader` 传凭据，令牌不进 URL。
+
+首次从零部署的完整步骤（含网页上传方式）见 **[部署到GitHub Pages.md](部署到GitHub%20Pages.md)**。
 
 `.nojekyll` 不能删——它阻止 GitHub 用 Jekyll 处理站点，否则可能漏掉资源文件。
 
@@ -76,7 +88,10 @@ python build_game.py     # 重新生成 HTML
 - `ELEM_ADV` / `ELEM_DIS` —— 克制倍率
 - `fuseChance()` —— 融合成功率公式
 - `TALENTS` —— 天赋效果
-- `USE_IMAGES` —— 开关立绘，关掉则回退内置程序化 SVG
+- `USE_IMAGES` / `IMG_EXT` —— 开关立绘、切换 webp/png
+- `LOYAL_*` / `STREAK_*` —— 忠心度与不败信念参数
+
+改了立绘素材后，跑 `python make_webp.py` 从 `_imgs/` 的原始 PNG 重新生成 WebP。
 
 ## 授权
 
